@@ -12,6 +12,7 @@
   import { afterNavigate } from '$app/navigation';
   import OnEvents from '$lib/components/OnEvents.svelte';
   import { Theme } from '$lib/constants';
+  import { assetViewerManager } from '$lib/managers/asset-viewer-manager.svelte';
   import { serverConfigManager } from '$lib/managers/server-config-manager.svelte';
   import { themeManager } from '$lib/managers/theme-manager.svelte';
   import MapSettingsModal from '$lib/modals/MapSettingsModal.svelte';
@@ -33,7 +34,7 @@
     type Map,
     type MapMouseEvent,
   } from 'maplibre-gl';
-  import { onDestroy, onMount, untrack } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
   import { t } from 'svelte-i18n';
   import {
     AttributionControl,
@@ -63,9 +64,10 @@
     onOpenInMapView?: (() => Promise<void> | void) | undefined;
     onSelect?: (assetIds: string[]) => void;
     onClusterSelect?: (assetIds: string[], bbox: SelectionBBox) => void;
-    onViewportSelect?: (assetIds: string[]) => void;
+    onViewportSelect?: (assetIds: string[], bbox: SelectionBBox) => void;
     onViewportClose?: () => void;
     viewportGridActive?: boolean;
+    autoOpenPanel?: boolean;
     onClickPoint?: ({ lat, lng }: { lat: number; lng: number }) => void;
     popup?: import('svelte').Snippet<[{ marker: MapMarkerResponseDto }]>;
     rounded?: boolean;
@@ -88,6 +90,7 @@
     onViewportSelect,
     onViewportClose,
     viewportGridActive = false,
+    autoOpenPanel = false,
     onClickPoint = () => {},
     popup,
     rounded = false,
@@ -283,6 +286,14 @@
     if (!mapMarkers) {
       mapMarkers = await loadMapMarkers();
     }
+    if (autoOpenPanel) {
+      // Wait for the map to finish rendering before opening the panel
+      await tick();
+      if (map) {
+        map.once('idle', () => handleViewportSelect());
+        map.resize();
+      }
+    }
   });
 
   onDestroy(() => {
@@ -329,15 +340,26 @@
       return;
     }
     const bounds = map.getBounds();
-    const visibleIds = mapMarkers
-      .filter((m) => bounds.contains([m.lon, m.lat]))
-      .map((m) => m.id);
+    const west = bounds.getWest();
+    const east = bounds.getEast();
 
-    onViewportSelect(visibleIds);
+    // When zoomed out enough to see the whole world, show all markers
+    const showAll = east - west >= 360;
+    const visibleIds = showAll
+      ? mapMarkers.map((m) => m.id)
+      : mapMarkers.filter((m) => bounds.contains([m.lon, m.lat])).map((m) => m.id);
+
+    const bbox: SelectionBBox = {
+      west: showAll ? -180 : west,
+      south: showAll ? -90 : bounds.getSouth(),
+      east: showAll ? 180 : east,
+      north: showAll ? 90 : bounds.getNorth(),
+    };
+    onViewportSelect(visibleIds, bbox);
   }
 
   function handleMoveEnd() {
-    if (viewportGridActive) {
+    if (viewportGridActive && !assetViewerManager.isViewing) {
       handleViewportSelect();
     }
   }
@@ -377,6 +399,15 @@
       {#if !simplified}
         <GeolocateControl position="top-left" />
         <FullscreenControl position="top-left" />
+        {#if onViewportSelect}
+          <Control position="top-left">
+            <ControlGroup>
+              <ControlButton onclick={() => viewportGridActive ? onViewportClose?.() : handleViewportSelect()}>
+                <Icon title={$t('show_photos_in_area')} icon={mdiImageMultiple} size="100%" class="text-black/80" />
+              </ControlButton>
+            </ControlGroup>
+          </Control>
+        {/if}
         <ScaleControl />
         <AttributionControl compact={false} />
       {/if}
@@ -387,16 +418,6 @@
         <ControlGroup>
           <ControlButton onclick={handleSettingsClick}>
             <Icon icon={mdiCog} size="100%" class="text-black/80" />
-          </ControlButton>
-        </ControlGroup>
-      </Control>
-    {/if}
-
-    {#if onViewportSelect && !simplified}
-      <Control position="top-right">
-        <ControlGroup>
-          <ControlButton onclick={() => viewportGridActive ? onViewportClose?.() : handleViewportSelect()}>
-            <Icon title={$t('show_photos_in_area')} icon={mdiImageMultiple} size="100%" class="text-black/80" />
           </ControlButton>
         </ControlGroup>
       </Control>
