@@ -19,7 +19,7 @@
   import { getAssetMediaUrl, handlePromiseError } from '$lib/utils';
   import { getMapMarkers, type MapMarkerResponseDto } from '@immich/sdk';
   import { Icon, modalManager } from '@immich/ui';
-  import { mdiCog, mdiMap, mdiMapMarker } from '@mdi/js';
+  import { mdiCog, mdiImageMultiple, mdiMap, mdiMapMarker } from '@mdi/js';
   import type { Feature, GeoJsonProperties, Geometry, Point } from 'geojson';
   import { isEqual, omit } from 'lodash-es';
   import { DateTime, Duration } from 'luxon';
@@ -63,6 +63,9 @@
     onOpenInMapView?: (() => Promise<void> | void) | undefined;
     onSelect?: (assetIds: string[]) => void;
     onClusterSelect?: (assetIds: string[], bbox: SelectionBBox) => void;
+    onViewportSelect?: (assetIds: string[]) => void;
+    onViewportClose?: () => void;
+    viewportGridActive?: boolean;
     onClickPoint?: ({ lat, lng }: { lat: number; lng: number }) => void;
     popup?: import('svelte').Snippet<[{ marker: MapMarkerResponseDto }]>;
     rounded?: boolean;
@@ -82,6 +85,9 @@
     onOpenInMapView = undefined,
     onSelect = () => {},
     onClusterSelect,
+    onViewportSelect,
+    onViewportClose,
+    viewportGridActive = false,
     onClickPoint = () => {},
     popup,
     rounded = false,
@@ -318,6 +324,24 @@
     untrack(() => map?.jumpTo({ center, zoom }));
   });
 
+  function handleViewportSelect() {
+    if (!map || !onViewportSelect || !mapMarkers) {
+      return;
+    }
+    const bounds = map.getBounds();
+    const visibleIds = mapMarkers
+      .filter((m) => bounds.contains([m.lon, m.lat]))
+      .map((m) => m.id);
+
+    onViewportSelect(visibleIds);
+  }
+
+  function handleMoveEnd() {
+    if (viewportGridActive) {
+      handleViewportSelect();
+    }
+  }
+
   const onAssetsDelete = async () => {
     mapMarkers = await loadMapMarkers();
   };
@@ -339,6 +363,7 @@
   onload={(event: Map) => {
     event.setMaxZoom(18);
     event.on('click', handleMapClick);
+    event.on('moveend', handleMoveEnd);
     if (!simplified) {
       event.addControl(new GlobeControl(), 'top-left');
     }
@@ -362,6 +387,16 @@
         <ControlGroup>
           <ControlButton onclick={handleSettingsClick}>
             <Icon icon={mdiCog} size="100%" class="text-black/80" />
+          </ControlButton>
+        </ControlGroup>
+      </Control>
+    {/if}
+
+    {#if onViewportSelect && !simplified}
+      <Control position="top-right">
+        <ControlGroup>
+          <ControlButton onclick={() => viewportGridActive ? onViewportClose?.() : handleViewportSelect()}>
+            <Icon title={$t('show_photos_in_area')} icon={mdiImageMultiple} size="100%" class="text-black/80" />
           </ControlButton>
         </ControlGroup>
       </Control>
