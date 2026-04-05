@@ -290,7 +290,7 @@
       // Wait for the map to finish rendering before opening the panel
       await tick();
       if (map) {
-        map.once('idle', () => handleViewportSelect());
+        void map.once('idle', () => handleViewportSelect());
         map.resize();
       }
     }
@@ -402,7 +402,7 @@
         {#if onViewportSelect}
           <Control position="top-left">
             <ControlGroup>
-              <ControlButton onclick={() => viewportGridActive ? onViewportClose?.() : handleViewportSelect()}>
+              <ControlButton onclick={() => (viewportGridActive ? onViewportClose?.() : handleViewportSelect())}>
                 <Icon title={$t('show_photos_in_area')} icon={mdiImageMultiple} size="100%" class="text-black/80" />
               </ControlButton>
             </ControlGroup>

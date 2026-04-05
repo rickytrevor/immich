@@ -81,7 +81,15 @@
             </div>
           {/await}
         {:then { default: Map }}
-          <Map hash onSelect={onViewAssets} {onClusterSelect} {onViewportSelect} onViewportClose={closeTimelinePanel} viewportGridActive={isViewportMode && isTimelinePanelVisible} autoOpenPanel={$mapSettings.showAssetPanel} />
+          <Map
+            hash
+            onSelect={onViewAssets}
+            {onClusterSelect}
+            {onViewportSelect}
+            onViewportClose={closeTimelinePanel}
+            viewportGridActive={isViewportMode && isTimelinePanelVisible}
+            autoOpenPanel={$mapSettings.showAssetPanel}
+          />
         {/await}
       </div>
 
