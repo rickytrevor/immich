@@ -290,8 +290,9 @@
       // Wait for the map to finish rendering before opening the panel
       await tick();
       if (map) {
-        void map.once('idle', () => handleViewportSelect());
         map.resize();
+        await map.once('idle');
+        handleViewportSelect();
       }
     }
   });
@@ -335,7 +336,7 @@
     untrack(() => map?.jumpTo({ center, zoom }));
   });
 
-  function handleViewportSelect() {
+  const handleViewportSelect = () => {
     if (!map || !onViewportSelect || !mapMarkers) {
       return;
     }
@@ -346,8 +347,8 @@
     // When zoomed out enough to see the whole world, show all markers
     const showAll = east - west >= 360;
     const visibleIds = showAll
-      ? mapMarkers.map((m) => m.id)
-      : mapMarkers.filter((m) => bounds.contains([m.lon, m.lat])).map((m) => m.id);
+      ? mapMarkers.map(({ id }) => id)
+      : mapMarkers.filter(({ lon, lat }) => bounds.contains([lon, lat])).map(({ id }) => id);
 
     const bbox: SelectionBBox = {
       west: showAll ? -180 : west,
@@ -356,13 +357,13 @@
       north: showAll ? 90 : bounds.getNorth(),
     };
     onViewportSelect(visibleIds, bbox);
-  }
+  };
 
-  function handleMoveEnd() {
+  const handleMoveEnd = () => {
     if (viewportGridActive && !assetViewerManager.isViewing) {
       handleViewportSelect();
     }
-  }
+  };
 
   const onAssetsDelete = async () => {
     mapMarkers = await loadMapMarkers();
